@@ -5,63 +5,67 @@ import java.util.*;
  */
 public class GreedyStrategy implements RobbingStrategy {
     Set<String> highAlertForts = new HashSet<>();
-    Set<String> badForts = new HashSet<>();
+    Set<String> fortWithStars = new HashSet<>();
+    Set<String> fortWithSharp = new HashSet<>();
     List<String> vertices;
+    List<String> forHighAlertList = new ArrayList<>();
 
     @Override
     public List<String> chooseOrderToAttack(LabeledValueGraph graph) {
         //TODO: Implement a greedy strategy to select the order of vertices to attack
         vertices = graph.getAllVertexLabels();
-        System.out.println("Pre greedy vertex: " + vertices);
         List<String> greedyOrdering = new ArrayList<>();
-        greedyAttack(graph, vertices, greedyOrdering);
-        greedyOrdering.addAll(badForts);
+        cleanGraph(graph);
+        greedyOrdering.addAll(fortWithSharp);
+        greedyAttack(graph, vertices, greedyOrdering, false);
         for(String fort : highAlertForts) {
-            if(! greedyOrdering.contains(fort)){
+            if(!greedyOrdering.contains(fort) && !fortWithStars.contains(fort)){
                 greedyOrdering.add(fort);
             }
         }
-        //System.out.println("bad forts: " + badForts);
-        System.out.println("Final order:       " + greedyOrdering);
+        greedyOrdering.addAll(fortWithStars);
         return greedyOrdering;
     }
 
-    private void greedyAttack(LabeledValueGraph graph, List<String> vertices, List<String> greedyOrdering){
-        //System.out.println("greedy");
+    private void greedyAttack(LabeledValueGraph graph, List<String> vertices, List<String> greedyOrdering, boolean forHighAlert){
         if(vertices.isEmpty()){
             return;
         }
-        removeBadForts(graph);
-        //System.out.println(vertices);
-        //Find the fort to attack
-        String maxFort = computeGoldMax(graph, vertices);
+        String maxFort = computeGoldMax(graph, vertices, forHighAlert);
 
-        //Update greedyOrdering and attack that fort
-        if(! attackFort(graph, maxFort)){
+        if(!attackFort(graph, maxFort)){
             return;
         }
         greedyOrdering.add(maxFort);
-
 
         //remove the max vertices from the list to rerun GreedyAttack()
         vertices.remove(maxFort);
 
         //rerun GreedyAttack of graph g - fort
-        greedyAttack(graph, vertices, greedyOrdering);
+        greedyAttack(graph, vertices, greedyOrdering, forHighAlert);
     }
 
-    private void removeBadForts(LabeledValueGraph graph) {
+    private void cleanGraph(LabeledValueGraph graph) {
+        /***
+         * This function remove all the fort with * and add all fort
+         * with ! to high alert list. This is "data preprocessing"
+         */
         for (String fortName : vertices){
+            if(fortName.contains("#") && !fortName.contains("!") && !fortName.contains("*")){
+                fortWithSharp.add(fortName);
+            }
             if (fortName.contains("*")) { //*
-                badForts.add(fortName);
+                fortWithStars.add(fortName);
+            }
+            if (fortName.contains("!")){
+                highAlertForts.add(fortName);
             }
         }
-        vertices.removeAll(badForts);
+        vertices.removeAll(fortWithSharp);
+        vertices.removeAll(fortWithStars);
     }
 
-    private String computeGoldMax(LabeledValueGraph graph, List<String> vertices){
-        //List<Double> goldAtEachFort = new ArrayList<>();
-        //System.out.println("comp max");
+    private String computeGoldMax(LabeledValueGraph graph, List<String> vertices, boolean forHighAlert){
         double MaxGold = Double.MIN_VALUE;
         String maxFort = "";
         for (String fortName : vertices){
@@ -69,12 +73,28 @@ public class GreedyStrategy implements RobbingStrategy {
             if (highAlertForts.contains(fortName) && !fortName.contains("*")) { //*
                 goldHere = goldHere / 2.0;
             }
-            if((goldHere > MaxGold) && ! highAlertForts.contains(fortName)){
+            /***
+             * Now this is the problem: After a while,
+             * I will have a graph all high alert. This code will not
+             * handle them!
+             */
+            if (forHighAlert){
+                if((goldHere > MaxGold)){
                     MaxGold = goldHere;
                     maxFort = fortName;
-            } else if (((goldHere == MaxGold) && ! highAlertForts.contains(fortName))){
-                if(graph.getAdjacentVertices(fortName).size() < graph.getAdjacentVertices(maxFort).size()){
+                } else if ((goldHere == MaxGold)){
+                    if(graph.getAdjacentVertices(fortName).size() < graph.getAdjacentVertices(maxFort).size()){
+                        maxFort = fortName;
+                    }
+                }
+            } else {
+                if((goldHere > MaxGold) && !highAlertForts.contains(fortName)){
+                    MaxGold = goldHere;
                     maxFort = fortName;
+                } else if ((goldHere == MaxGold) && !highAlertForts.contains(fortName)){
+                    if(graph.getAdjacentVertices(fortName).size() < graph.getAdjacentVertices(maxFort).size()){
+                        maxFort = fortName;
+                    }
                 }
             }
             //goldAtEachFort.add(goldHere);
@@ -86,7 +106,6 @@ public class GreedyStrategy implements RobbingStrategy {
         if(Objects.equals(fortName, "")){
             return false;
         }
-        //System.out.println("attacking : " + fortName);
         if (fortName.contains("!")) { //!
             highAlertForts.add(fortName);
         }
@@ -94,7 +113,6 @@ public class GreedyStrategy implements RobbingStrategy {
             List<String> neighbors = graph.adj(fortName);
             highAlertForts.addAll(neighbors);
         }
-        //System.out.println("attack end");
         return true;
     }
 
